@@ -1,5 +1,5 @@
 # VideoStitching
-Script used for stitching together chunks of video. Most likely coming from a VMS system or a companion script called streamChunker
+Script used for stitching together chunks of video. Most likely coming from a VMS system or a companion script called streamChunker.
 Includes a GUI for selecting the videos/setting recording parameters/saving output file.
 
 Tested on:
