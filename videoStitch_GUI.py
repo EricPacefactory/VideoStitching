@@ -14,8 +14,9 @@ import datetime as dt
 import re
 
 from local.lib.video.io import setupVideoCapture, setupVideoRecording
-from local.lib.video.windowing import SimpleWindow, breakByKeypress, arrowKeys
+from local.lib.video.windowing import SimpleWindow, breakByKeypress, arrowKeys, displayDimensionsWH
 from local.lib.utils.files import guiLoadMany, guiSave, guiConfirm, guiDialogEntry
+
 
 # ---------------------------------------------------------------------------------------------------------------------
 #%% Magic sorting functions
@@ -195,10 +196,19 @@ def crop_video(video_source, vidWH, vidFPS):
     hBorder = 35
     borderWH = np.array((wBorder, hBorder))
     cropping_frame_delay = int(1000/vidFPS)
+    
+    # Check if the user display is large enough to show the image. If not, we'll need to shrink it
+    dispWH = displayDimensionsWH()
+    maxW = int(dispWH[0]*0.75)
+    maxH = int(dispWH[1]*0.75)
+    resizeWH = (min(maxW, vidWH[0]), min(maxH, vidWH[1]))
+    resize_unscaling = (vidWH - np.array((1, 1))) / (resizeWH - np.array((1,1)))
+    
+    # Create initial region for cropping (user can adjust this with mouse)
     initial_crop_region_norm = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+    initial_crop_region = np.int32(np.array(initial_crop_region_norm)*(np.array(resizeWH) - np.array((1,1))))
     
-    initial_crop_region = np.int32(np.array(initial_crop_region_norm)*(np.array(vidWH) - np.array((1,1))))
-    
+    # Store callback data for mouse interaction
     crop_cb_data = {"mouse_move_offset": 1000000,
                     "mouse": None,
                     "borderWH": borderWH,
@@ -206,6 +216,7 @@ def crop_video(video_source, vidWH, vidFPS):
                     "zonepoint_select": None,
                     "zone_list": [initial_crop_region],
                     "new_points": []}
+    
     
     # Set up windowing and video capture
     videoObj, _, _ = setupVideoCapture(video_source, verbose=False)
@@ -222,7 +233,7 @@ def crop_video(video_source, vidWH, vidFPS):
             videoObj.set(cv2.CAP_PROP_POS_FRAMES, 0)
             
         # Resize the frame if needed
-        scaledFrame = cv2.resize(inFrame, dsize=vidWH)
+        scaledFrame = cv2.resize(inFrame, dsize=resizeWH)#vidWH)
         
         # Create bordered frame for drawing crop region
         # Add borders to the frame for drawing 'out-of-bounds'
@@ -262,11 +273,15 @@ def crop_video(video_source, vidWH, vidFPS):
     videoObj.release()
     cv2.destroyAllWindows()
     
-    # Get crop-coords
+    # Get crop-coords in px (point order: TL, TR, BR, BL)
     crop_pt1 = crop_cb_data["zone_list"][0][0] # Top-left
     crop_pt2 = crop_cb_data["zone_list"][0][2] # Bot-right
     
-    # Get cropping co-ordinates
+    # Normalize cropping points
+    crop_pt1 = np.int32(np.round(crop_pt1 * resize_unscaling))
+    crop_pt2 = np.int32(np.round(crop_pt2 * resize_unscaling))
+    
+    # Get cropping xy co-ordinates
     cropY1, cropY2 = crop_pt1[1], crop_pt2[1]
     cropX1, cropX2 = crop_pt1[0], crop_pt2[0]
     
